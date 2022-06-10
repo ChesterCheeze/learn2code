@@ -56,6 +56,29 @@ SELECT cid FROM t1 LIMIT 1)
 ;
 */
 
+SELECT 63 AS 'ปี', COUNT(DISTINCT(hospcode || pid)) AS 'จำนวนผู้มารับบริการ' FROM hdc;
 
+WITH step1 AS 
+    (
+    SELECT (hospcode || pid) AS pkey FROM hdc GROUP BY (hospcode || pid)
+    )
+    SELECT COUNT(pkey) FROM step1;
 
+SELECT diagcode_opd, COUNT(diagcode_opd) AS count FROM hdc GROUP BY diagcode_opd;
 
+SELECT date_serv FROM hdc GROUP BY date_serv ORDER BY date_serv;
+
+SELECT diagcode_opd, COUNT(diagcode_opd) AS count FROM hdc WHERE diagtype_opd =
+(SELECT diagtype_opd FROM hdc GROUP BY diagtype_opd LIMIT 1);
+
+SELECT ROW_NUMBER() OVER(PARTITION BY cid) AS RowNum, 
+cid, 
+date_serv, 
+diagcode_opd, 
+diagtype_opd 
+FROM hdc;
+
+SELECT cid, birth, sex, diagcode_opd, diagtype_opd, date_serv FROM hdc WHERE cid IN 
+    (
+    SELECT cid FROM (SELECT (cid || birth) AS id, cid, birth, COUNT(cid) FROM hdc GROUP BY (cid || birth) ORDER BY COUNT((cid || birth)) DESC LIMIT 1)
+    ) ORDER BY date_serv;
