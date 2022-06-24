@@ -7,18 +7,22 @@
 
 .print "Select 5 rows from hdc table."\n
 
-SELECT * FROM hdc LIMIT 5;
+SELECT * FROM opd LIMIT 5;
 
 .print \n
 
 .print "Explore patient's age." \n
 
 SELECT MIN(age), MAX(age), AVG(age)
-FROM hdc;
+FROM opd;
+
+SELECT * FROM opd WHERE age < 2 ORDER BY age;
 
 SELECT *
-FROM hdc
-WHERE age >100.0;
+FROM opd
+WHERE age >100.0
+GROUP BY diagtype_opd, pid
+;
 
 .print "Select all data in icd_code table." \n
 
@@ -29,40 +33,51 @@ SELECT * FROM icd_code;
 .print "Explore all diagcode_opd data in hdc table." \n
 
 SELECT diagcode_opd, COUNT(diagcode_opd) AS count 
-FROM hdc 
+FROM opd 
 GROUP BY diagcode_opd;
 
 .print \n
 
-.print "Count number of diag code in hdc table." \n
 
-SELECT diagcode_opd, COUNT(diagcode_opd) AS count
-FROM hdc
-GROUP BY diagcode_opd;
+-- Update value in diagcode_opd 
 
-.print \n
-
-UPDATE hdc
+UPDATE opd
 SET diagcode_opd = 'A500'
 WHERE diagcode_opd = 'A50.0';
 
-UPDATE hdc
+UPDATE opd
 SET diagcode_opd = 'A510'
 WHERE diagcode_opd = 'A51.0';
 
-UPDATE hdc
+UPDATE opd
+SET diagcode_opd = 'A512'
+WHERE diagcode_opd = 'A51.2';
+
+UPDATE opd
 SET diagcode_opd = 'A513'
 WHERE diagcode_opd = 'A51.3';
 
-UPDATE hdc
+UPDATE opd
 SET diagcode_opd = 'A514'
 WHERE diagcode_opd = 'A51.4';
 
-UPDATE hdc
+UPDATE opd
 SET diagcode_opd = 'A515'
 WHERE diagcode_opd = 'A51.5';
 
-UPDATE hdc
+UPDATE opd
+SET diagcode_opd = 'A528'
+WHERE diagcode_opd = 'A52.8';
+
+UPDATE opd
+SET diagcode_opd = 'A529'
+WHERE diagcode_opd = 'A52.9';
+
+UPDATE opd
+SET diagcode_opd = 'A530'
+WHERE diagcode_opd = 'A53.0';
+
+UPDATE opd
 SET diagcode_opd = 'A539'
 WHERE diagcode_opd = 'A53.9';
 
@@ -70,34 +85,53 @@ WHERE diagcode_opd = 'A53.9';
 
 SELECT a.diagcode_opd, b.description_en, b.description_th, staging
 FROM
-    hdc a LEFT JOIN icd_code b ON a.diagcode_opd = b.diagcode
+    opd a LEFT JOIN icd_code b ON a.diagcode_opd = b.diagcode
 GROUP BY a.diagcode_opd;
 
 .print "Explore data in diagtype_opd column." \n
 
 SELECT diagtype_opd, COUNT(diagtype_opd) AS count
-FROM hdc 
+FROM opd 
 GROUP BY diagtype_opd;
 
 .print \n
 
-UPDATE hdc
+UPDATE opd
+SET diagtype_opd = NULL
+WHERE diagtype_opd = (
+    SELECT diagtype_opd 
+    FROM opd 
+    GROUP BY diagtype_opd
+    LIMIT 1
+    OFFSET 1
+);
+
+UPDATE opd
 SET diagtype_opd = NULL
 WHERE diagtype_opd = '"';
 
-UPDATE hdc
+UPDATE opd
+SET diagtype_opd = NULL
+WHERE diagtype_opd = '.';
+
+UPDATE opd
 SET diagtype_opd = NULL
 WHERE diagtype_opd = '0';
 
-UPDATE hdc
+UPDATE opd
+SET diagtype_opd = NULL
+WHERE diagtype_opd = '8';
+
+UPDATE opd
 SET diagtype_opd = NULL
 WHERE diagtype_opd = 'z';
 
 .print "After update." \n
 
 SELECT diagtype_opd, COUNT(diagtype_opd) 
-FROM hdc 
-GROUP BY diagtype_opd;
+FROM opd 
+GROUP BY diagtype_opd
+;
 
 .print "Test join diagtype_opd with diagtype to get diag type description." \n
 
@@ -199,7 +233,7 @@ CREATE VIEW IF NOT EXISTS person AS
     FROM hdc_view
     GROUP BY unique_id;
 
--- Main data
+-- Dataset 1 
 WITH table1 AS (
 SELECT
     p.unique_id,

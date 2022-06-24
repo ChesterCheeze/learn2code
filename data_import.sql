@@ -3,7 +3,7 @@ DROP TABLE IF EXISTS hdc;
 DROP TABLE IF EXISTS icd_code;
 
 -- Create initial hdc table.
-CREATE TABLE IF NOT EXISTS hdc
+CREATE TABLE IF NOT EXISTS opd
     (
         hospcode TEXT,
         pid TEXT,
@@ -29,11 +29,11 @@ CREATE TABLE IF NOT EXISTS icd_code
 .mode csv
 
 -- Import data into hdc and icd_code table.
-.import ./data/raw/df.csv hdc
+.import ./data/raw/df_hdc_opd.csv opd
 .import ./data/raw/icd_code.csv icd_code
 
 -- Delete header row.
-DELETE FROM hdc WHERE hospcode = 'a.hospcode';
+DELETE FROM opd WHERE hospcode = 'hospcode';
 DELETE FROM icd_code WHERE diagcode = 'diagcode';
 
 
@@ -43,18 +43,18 @@ DELETE FROM icd_code WHERE diagcode = 'diagcode';
     - Query data from hdc_temp and add age column.
     - Grouping age into age_group column.
 */
-CREATE TABLE IF NOT EXISTS hdc_temp AS SELECT * FROM hdc;
+CREATE TABLE IF NOT EXISTS opd_temp AS SELECT * FROM opd;
 
-DROP TABLE IF EXISTS hdc;
+DROP TABLE IF EXISTS opd;
 
-CREATE TABLE IF NOT EXISTS hdc AS 
+CREATE TABLE IF NOT EXISTS opd AS 
     WITH age_calc AS 
         (
             SELECT 
                 *,
                 -- change from mid-year date to date_serv. 
                 (JULIANDAY(date_serv)-JULIANDAY(birth))/365.25 AS age 
-            FROM hdc_temp
+            FROM opd_temp
         )
     SELECT 
         *,
@@ -88,7 +88,7 @@ CREATE TABLE IF NOT EXISTS hdc AS
         age_calc;
 
 -- Drop hdc_temp table since new hdc table was created.
-DROP TABLE IF EXISTS hdc_temp;
+DROP TABLE IF EXISTS opd_temp;
 
 DROP TABLE IF EXISTS diag_type;
 
