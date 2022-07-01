@@ -135,8 +135,8 @@ GROUP BY diagtype_opd
 
 .print "Test join diagtype_opd with diagtype to get diag type description." \n
 
-SELECT a.diagtype_opd, b.description, COUNT(a.diagtype_opd) AS count
-FROM hdc a LEFT JOIN diag_type b ON a.diagtype_opd = b.diagtype
+SELECT a.diagtype_opd, b.diagtype_des, COUNT(a.diagtype_opd) AS count
+FROM opd a LEFT JOIN diag_type b ON a.diagtype_opd = b.diagtype_id
 GROUP BY a.diagtype_opd;
 
 .print "Count number of patient visiting opd in 2021." \n
@@ -144,7 +144,7 @@ GROUP BY a.diagtype_opd;
 -- โดยจัดกลุ่มเป็น primary secondary tertiary
 
 --Create abstract table over hdc which exclude record where age over 100 since the record may not valid.
-CREATE VIEW IF NOT EXISTS hdc_view AS 
+CREATE VIEW IF NOT EXISTS opd_view AS 
     SELECT 
         (hospcode || pid) AS unique_id,
         cid, 
@@ -157,13 +157,13 @@ CREATE VIEW IF NOT EXISTS hdc_view AS
         age, 
         age_group
     FROM 
-        hdc
+        opd
     WHERE
-        age < 100.0
+        age < 100.0 AND age > 0.0
 ;
 
 -- Number of individual patient in hdc table.
-SELECT COUNT(DISTINCT(unique_id)) AS 'number of patients' FROM hdc_view;
+SELECT COUNT(DISTINCT(unique_id)) AS 'number of patients' FROM opd_view;
 
 -- Number of patients with principle diagnosis.
 SELECT * FROM (
@@ -185,7 +185,7 @@ SELECT
     MAX(age),
     COUNT(DISTINCT(date_serv)) AS n_days_opd_visit,
     COUNT(DISTINCT(diagcode_opd)) AS n_icd_dx
-FROM hdc_view
+FROM opd_view
 GROUP BY unique_id
 ORDER BY COUNT(DISTINCT(date_serv)) DESC;
 
@@ -230,26 +230,29 @@ CREATE VIEW IF NOT EXISTS person AS
         nation,
         MAX(age) AS age,
         age_group
-    FROM hdc_view
+    FROM opd_view
     GROUP BY unique_id;
 
+SELECT * FROM person;
+
 -- Dataset 1 
-WITH table1 AS (
+WITH table64 AS (
 SELECT
-    p.unique_id,
+    ('id' || p.unique_id) AS record_id,
     p.cid,
     p.birth,
     p.sex,
     p.nation,
     p.age,
     p.age_group,
-    h.diagtype_opd,
-    h.diagcode_opd
+    o.diagtype_opd,
+    o.diagcode_opd,
+    MAX(o.date_serv) AS latest
 FROM
-    person p JOIN hdc_view h ON p.unique_id = h.unique_id
-WHERE h.diagtype_opd = '1' AND p.nation = '99' 
-GROUP BY h.unique_id, h.diagcode_opd
-ORDER BY h.unique_id
+    person p JOIN opd_view o ON p.unique_id = o.unique_id
+WHERE o.diagtype_opd = '1' AND p.nation = '99' 
+GROUP BY o.unique_id, o.diagcode_opd
+ORDER BY o.unique_id
 )
 SELECT 
     t.*,
@@ -257,9 +260,61 @@ SELECT
     i.description_th,
     i.staging
 FROM 
-    table1 t LEFT JOIN icd_code i ON t.diagcode_opd = i.diagcode 
+    table64 t LEFT JOIN icd_code i ON t.diagcode_opd = i.diagcode
+WHERE STRFTIME('%Y',t.latest) = '2012'
 ;
 
+-------------------------------------------------------------------------
+SELECT MIN(age), MAX(age), AVG(age)
+FROM ipd;
+
+CREATE VIEW IF NOT EXISTS ipd_view AS 
+    SELECT 
+        (hospcode || pid) AS unique_id,
+        cid, 
+        birth, 
+        sex, 
+        nation, 
+        diagcode_ipd, 
+        diagtype_ipd, 
+        datetime_admit, 
+        age, 
+        age_group
+    FROM 
+        ipd
+    WHERE
+        age < 100.0 AND age > 0.0
+;
+
+SELECT * FROM ipd_view;
+
+WITH table64 AS (
+SELECT
+    ('id' || p.unique_id) AS record_id,
+    p.cid,
+    p.birth,
+    p.sex,
+    p.nation,
+    p.age,
+    p.age_group,
+    o.diagtype_opd,
+    o.diagcode_opd,
+    MAX(o.date_serv) AS latest
+FROM
+    person p JOIN opd_view o ON p.unique_id = o.unique_id
+WHERE o.diagtype_opd = '1' AND p.nation = '99' 
+GROUP BY o.unique_id, o.diagcode_opd
+ORDER BY o.unique_id
+)
+SELECT 
+    t.*,
+    i.description_en,
+    i.description_th,
+    i.staging
+FROM 
+    table64 t LEFT JOIN icd_code i ON t.diagcode_opd = i.diagcode
+WHERE STRFTIME('%Y',t.latest) = '2012'
+;
 
 
 SELECT * FROM hdc_view WHERE unique_id = '11371004171' ORDER BY date_serv;
@@ -297,7 +352,7 @@ ORDER BY COUNT(diagcode_opd);
 /*
     Set of data 
     Row      1 2 3 4 5 6 7
-    Value    1 2 3 4 5 6 7
+    Value    a b c d e f g
     OFFSET   0 1 2 3 4 5 6
     -------------------------
     Modulo operator donoted by '%'
