@@ -268,34 +268,34 @@ WHERE STRFTIME('%Y',t.latest) = '2012'
 --Individual record each years.
 WITH table1 AS (
 SELECT  
-('id' || unique_id) AS individual,
-cid,
-birth,
-sex,
-nation,
-'opd' AS gr,
-diagcode_opd AS dx_code,
-diagtype_opd AS dx_type,
-date_serv AS date,
-age,
-age_group,
-STRFTIME('%Y', date_serv) AS year
+    ('id' || unique_id) AS individual,
+    cid,
+    birth,
+    sex,
+    nation,
+    'opd' AS gr,
+    diagcode_opd AS dx_code,
+    diagtype_opd AS dx_type,
+    date_serv AS date,
+    age,
+    age_group,
+    STRFTIME('%Y', date_serv) AS year
 FROM opd_view
 GROUP BY unique_id
 UNION ALL
 SELECT 
-('id' || a.unique_id) AS individual,
-a.cid,
-a.birth,
-a.sex,
-a.nation,
-'ipd' AS gr,
-a.diagcode_ipd AS dx_code,
-a.diagtype_ipd AS dx_type,
-DATE(a.datetime_admit) AS date,
-a.age,
-a.age_group,
-STRFTIME('%Y', datetime_admit) AS year
+    ('id' || a.unique_id) AS individual,
+    a.cid,
+    a.birth,
+    a.sex,
+    a.nation,
+    'ipd' AS gr,
+    a.diagcode_ipd AS dx_code,
+    a.diagtype_ipd AS dx_type,
+    DATE(a.datetime_admit) AS date,
+    a.age,
+    a.age_group,
+    STRFTIME('%Y', datetime_admit) AS year
 FROM ipd_view a
 WHERE a.unique_id NOT IN (
     SELECT unique_id FROM opd_view GROUP BY unique_id
