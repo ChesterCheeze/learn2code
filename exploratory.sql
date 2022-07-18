@@ -418,3 +418,29 @@ FROM median_nDx
 LIMIT 2 - (SELECT COUNT(*) FROM median_nDx)%2
 OFFSET (SELECT (COUNT(*)-1)/2 FROM median_nDx));
 
+--Ranking
+WITH table1 AS (
+    SELECT 
+    *,
+    CASE
+        WHEN diagcode = 'A500' THEN 'Early symptomatic'
+        WHEN diagcode = 'A501' THEN 'Early latent'
+        WHEN diagcode = 'A504' THEN 'Neurosyphilis'
+        WHEN diagcode IN ('A503', 'A505') THEN 'Late symptomatic'
+        WHEN diagcode IN ('A506', 'A507') THEN 'Late latent'
+        WHEN diagcode IN ('A502', 'A509') THEN 'Unspecified'
+        WHEN diagcode IN ('A510', 'A511', 'A512') THEN 'Primary'
+        WHEN diagcode IN ('A513', 'A514') THEN 'Secondary'
+        WHEN diagcode IN ('A515', 'A519') THEN 'Early'
+        WHEN diagcode IN ('A521', 'A522', 'A523') THEN 'Neurosyphilis'
+        WHEN diagcode IN ('A527', 'A528', 'A529', 'N290') THEN 'Late'
+        WHEN diagcode IN ('A530', 'A539') THEN 'Unspecified'
+        ELSE description_en
+    END AS subgroup
+    FROM icd_code)
+SELECT 
+diagcode,
+description_en,
+subgroup
+FROM table1
+;
