@@ -143,7 +143,7 @@ GROUP BY a.diagtype_opd;
 -- คนหนึ่งคน ใน 1 ปี สามารถมี diag code ได้หลายรหัส ในกรณี ควรจะนับอยู่ในรหัส diag code ที่รุนแรงที่สุด ดังนั้นจะต้องมีการเพิ่มลำดับความรุนแรงของรหัสวินิจฉัย
 -- โดยจัดกลุ่มเป็น primary secondary tertiary
 
---Create abstract table over hdc which exclude record where age over 100 since the record may not valid.
+--[opd_view] Create abstract table over hdc which exclude record where age over 100 since the record may not valid.
 CREATE VIEW IF NOT EXISTS opd_view AS 
     SELECT 
         (hospcode || pid) AS unique_id,
@@ -265,7 +265,7 @@ FROM
 WHERE STRFTIME('%Y',t.latest) = '2012'
 ;
 
---Individual record each years.
+--[Dataset 1] Individual record.
 WITH table1 AS (
 SELECT  
     ('id' || unique_id) AS individual,
@@ -419,28 +419,115 @@ LIMIT 2 - (SELECT COUNT(*) FROM median_nDx)%2
 OFFSET (SELECT (COUNT(*)-1)/2 FROM median_nDx));
 
 --Ranking
-WITH table1 AS (
+CREATE VIEW icd_view AS 
+    WITH table1 AS (
+        SELECT 
+        *,
+        CASE
+            WHEN diagcode IN ('A500','A501','A502','A503','A504','A505','A506','A507','A509') THEN 'Congenital'
+            WHEN diagcode IN ('A510', 'A511', 'A512', 'A513', 'A514', 'A515', 'A519', 'A520', 'A521', 'A522', 'A523', 'A527', 'A528', 'A529', 'A530', 'A539', 'I980', 'M031', 'N290') THEN 'Acquired'
+            WHEN diagcode IN ('O981') THEN 'Syphilis complicating pregnancy'
+            ELSE description_en
+        END AS maingroup,
+        CASE
+            WHEN diagcode = 'A500' THEN 'Early symptomatic'
+            WHEN diagcode = 'A501' THEN 'Early latent'
+            WHEN diagcode = 'A504' THEN 'Neurosyphilis'
+            WHEN diagcode IN ('A503', 'A505') THEN 'Late symptomatic'
+            WHEN diagcode IN ('A506', 'A507') THEN 'Late latent'
+            WHEN diagcode IN ('A502', 'A509') THEN 'Unspecified'
+            WHEN diagcode IN ('A510', 'A511', 'A512') THEN 'Primary'
+            WHEN diagcode IN ('A513', 'A514') THEN 'Secondary'
+            WHEN diagcode IN ('A515', 'A519') THEN 'Early'
+            WHEN diagcode IN ('A521', 'A522', 'A523') THEN 'Neurosyphilis'
+            WHEN diagcode IN ('A527', 'A528', 'A529', 'A530') THEN 'Late'
+            WHEN diagcode IN ('A520', 'I980', 'M031', 'N290') THEN 'Tertiary'
+            WHEN diagcode IN ('A539') THEN 'Unspecified'
+            ELSE description_en
+        END AS subgroup
+        FROM icd_code)
     SELECT 
     *,
     CASE
-        WHEN diagcode = 'A500' THEN 'Early symptomatic'
-        WHEN diagcode = 'A501' THEN 'Early latent'
-        WHEN diagcode = 'A504' THEN 'Neurosyphilis'
-        WHEN diagcode IN ('A503', 'A505') THEN 'Late symptomatic'
-        WHEN diagcode IN ('A506', 'A507') THEN 'Late latent'
-        WHEN diagcode IN ('A502', 'A509') THEN 'Unspecified'
-        WHEN diagcode IN ('A510', 'A511', 'A512') THEN 'Primary'
-        WHEN diagcode IN ('A513', 'A514') THEN 'Secondary'
-        WHEN diagcode IN ('A515', 'A519') THEN 'Early'
-        WHEN diagcode IN ('A521', 'A522', 'A523') THEN 'Neurosyphilis'
-        WHEN diagcode IN ('A527', 'A528', 'A529', 'N290') THEN 'Late'
-        WHEN diagcode IN ('A530', 'A539') THEN 'Unspecified'
-        ELSE description_en
-    END AS subgroup
-    FROM icd_code)
+        WHEN subgroup LIKE 'Unspecified' THEN 1.0
+        WHEN subgroup LIKE 'Primary' THEN 2.0
+        WHEN subgroup LIKE 'Secondary' THEN 3.0
+        WHEN subgroup LIKE 'Early%' THEN 4.0
+        WHEN subgroup LIKE 'Late%' THEN 5.0
+        WHEN subgroup LIKE 'Tertiary' THEN 6.0
+        WHEN subgroup LIKE 'Neurosyphilis' THEN 7.0
+        WHEN subgroup LIKE '%pregnancy%' THEN 4.0
+        ELSE NULL
+    END AS score
+    FROM table1
+;
+
+/* [Dataset 2] combine opd and ipd record without exclude duplicated record
+    then join data with icd code.
+*/
+WITH level2 AS (
+WITH table1 AS (
+    SELECT  
+        ('id' || unique_id) AS individual,
+        cid,
+        birth,
+        sex,
+        nation,
+        age,
+        age_group,
+        'opd' AS service_type,
+        diagcode_opd AS dx_code,
+        diagtype_opd AS dx_type,
+        date_serv AS date_attend,
+        STRFTIME('%Y', date_serv) AS year_attend
+    FROM opd_view
+UNION ALL
+    SELECT 
+        ('id' || a.unique_id) AS individual,
+        a.cid,
+        a.birth,
+        a.sex,
+        a.nation,
+        a.age,
+        a.age_group,
+        'ipd' AS service_type,
+        a.diagcode_ipd AS dx_code,
+        a.diagtype_ipd AS dx_type,
+        DATE(a.datetime_admit) AS date_attend,
+        STRFTIME('%Y', datetime_admit) AS year_attend
+    FROM ipd_view a
+    WHERE a.unique_id NOT IN (
+        SELECT unique_id FROM opd_view GROUP BY unique_id
+        ) --Exclude all unique_id that already exist in opd_view.
+)
 SELECT 
-diagcode,
+a.*, b.description_en, b.description_th, b.staging, b.maingroup, b.subgroup, b.score 
+FROM table1 a LEFT JOIN icd_view b ON a.dx_code = b.diagcode
+--WHERE dx_type = '1'
+GROUP BY individual, year_attend, dx_code
+ORDER BY individual
+)
+SELECT
+(individual || '_' || year_attend) AS record_id,
+individual,
+cid,
+birth,
+sex,
+nation,
+age,
+age_group,
+year_attend,
+date_attend,
+service_type,
+dx_code,
+dx_type,
 description_en,
-subgroup
-FROM table1
+description_th,
+staging,
+maingroup,
+subgroup,
+MAX(score)
+FROM level2
+--WHERE nation = '99'
+GROUP BY individual, year_attend
 ;
