@@ -306,7 +306,7 @@ SELECT * FROM table1
 
 
 -------------------------------------------------------------------------
---IPD Section
+--[ipd_view] 
 SELECT MIN(age), MAX(age), AVG(age)
 FROM ipd;
 
@@ -325,7 +325,7 @@ CREATE VIEW IF NOT EXISTS ipd_view AS
     FROM 
         ipd
     WHERE
-        age < 100.0 AND age > 0.0
+        age < 100.0 AND age >= 0.0 --Include age at 0
 ;
 
 SELECT * FROM ipd_view;
