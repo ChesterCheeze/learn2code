@@ -267,40 +267,40 @@ WHERE STRFTIME('%Y',t.latest) = '2012'
 
 --[Dataset 1] Individual record.
 WITH table1 AS (
-SELECT  
-    ('id' || unique_id) AS individual,
-    cid,
-    birth,
-    sex,
-    nation,
-    'opd' AS gr,
-    diagcode_opd AS dx_code,
-    diagtype_opd AS dx_type,
-    date_serv AS date,
-    age,
-    age_group,
-    STRFTIME('%Y', date_serv) AS year
-FROM opd_view
-GROUP BY unique_id
+    SELECT  
+        ('id' || unique_id) AS individual,
+        cid,
+        birth,
+        sex,
+        nation,
+        'opd' AS gr,
+        diagcode_opd AS dx_code,
+        diagtype_opd AS dx_type,
+        date_serv AS date,
+        age,
+        age_group,
+        STRFTIME('%Y', date_serv) AS year
+    FROM opd_view
+    GROUP BY unique_id
 UNION ALL
-SELECT 
-    ('id' || a.unique_id) AS individual,
-    a.cid,
-    a.birth,
-    a.sex,
-    a.nation,
-    'ipd' AS gr,
-    a.diagcode_ipd AS dx_code,
-    a.diagtype_ipd AS dx_type,
-    DATE(a.datetime_admit) AS date,
-    a.age,
-    a.age_group,
-    STRFTIME('%Y', datetime_admit) AS year
-FROM ipd_view a
-WHERE a.unique_id NOT IN (
-    SELECT unique_id FROM opd_view GROUP BY unique_id
-    )
-GROUP BY a.unique_id)
+    SELECT 
+        ('id' || a.unique_id) AS individual,
+        a.cid,
+        a.birth,
+        a.sex,
+        a.nation,
+        'ipd' AS gr,
+        a.diagcode_ipd AS dx_code,
+        a.diagtype_ipd AS dx_type,
+        MIN(DATE(a.datetime_admit)) AS date,
+        a.age,
+        a.age_group,
+        STRFTIME('%Y', datetime_admit) AS year
+    FROM ipd_view a
+    WHERE a.unique_id NOT IN (
+        SELECT unique_id FROM opd_view GROUP BY unique_id
+        )
+    GROUP BY a.unique_id)
 SELECT * FROM table1
 ;
 
@@ -466,50 +466,50 @@ CREATE VIEW icd_view AS
     then join data with icd code.
 */
 WITH level2 AS (
-WITH table1 AS (
-    SELECT  
-        ('id' || unique_id) AS individual,
-        cid,
-        birth,
-        sex,
-        nation,
-        age,
-        age_group,
-        'opd' AS service_type,
-        diagcode_opd AS dx_code,
-        diagtype_opd AS dx_type,
-        date_serv AS date_attend,
-        STRFTIME('%Y', date_serv) AS year_attend
-    FROM opd_view
-UNION ALL
+    WITH table1 AS (
+        SELECT  
+            ('id' || unique_id) AS individual_id,
+            cid,
+            birth,
+            sex,
+            nation,
+            age,
+            age_group,
+            'opd' AS service_type,
+            diagcode_opd AS dx_code,
+            diagtype_opd AS dx_type,
+            date_serv AS date_attend,
+            STRFTIME('%Y', date_serv) AS year_attend
+        FROM opd_view
+    UNION ALL
+        SELECT 
+            ('id' || a.unique_id) AS individual_id,
+            a.cid,
+            a.birth,
+            a.sex,
+            a.nation,
+            a.age,
+            a.age_group,
+            'ipd' AS service_type,
+            a.diagcode_ipd AS dx_code,
+            a.diagtype_ipd AS dx_type,
+            DATE(a.datetime_admit) AS date_attend,
+            STRFTIME('%Y', datetime_admit) AS year_attend
+        FROM ipd_view a
+        WHERE a.unique_id NOT IN (
+            SELECT unique_id FROM opd_view GROUP BY unique_id
+            ) --Exclude all unique_id that already exist in opd_view.
+    )
     SELECT 
-        ('id' || a.unique_id) AS individual,
-        a.cid,
-        a.birth,
-        a.sex,
-        a.nation,
-        a.age,
-        a.age_group,
-        'ipd' AS service_type,
-        a.diagcode_ipd AS dx_code,
-        a.diagtype_ipd AS dx_type,
-        DATE(a.datetime_admit) AS date_attend,
-        STRFTIME('%Y', datetime_admit) AS year_attend
-    FROM ipd_view a
-    WHERE a.unique_id NOT IN (
-        SELECT unique_id FROM opd_view GROUP BY unique_id
-        ) --Exclude all unique_id that already exist in opd_view.
-)
-SELECT 
-a.*, b.description_en, b.description_th, b.staging, b.maingroup, b.subgroup, b.score 
-FROM table1 a LEFT JOIN icd_view b ON a.dx_code = b.diagcode
---WHERE dx_type = '1'
-GROUP BY individual, year_attend, dx_code
-ORDER BY individual
+    a.*, b.description_en, b.description_th, b.staging, b.maingroup, b.subgroup, b.score 
+    FROM table1 a LEFT JOIN icd_view b ON a.dx_code = b.diagcode
+    --WHERE dx_type = '1'
+    GROUP BY individual_id, year_attend, dx_code
+    ORDER BY individual_id
 )
 SELECT
-(individual || '_' || year_attend) AS record_id,
-individual,
+(individual_id || '_' || year_attend) AS record_id,
+individual_id,
 cid,
 birth,
 sex,
@@ -529,5 +529,40 @@ subgroup,
 MAX(score)
 FROM level2
 --WHERE nation = '99'
-GROUP BY individual, year_attend
+GROUP BY individual_id, year_attend
 ;
+
+WITH table1 AS (
+SELECT  
+    ('id' || unique_id) AS individual,
+    cid,
+    birth,
+    sex,
+    nation,
+    'opd' AS gr,
+    diagcode_opd AS dx_code,
+    diagtype_opd AS dx_type,
+    date_serv AS date,
+    age,
+    age_group,
+    STRFTIME('%Y', date_serv) AS year
+FROM opd_view
+)
+SELECT
+ROW_NUMBER() OVER(PARTITION BY a.individual ORDER BY a.date) AS rownum, a.*, b.*
+FROM table1 a
+LEFT JOIN 
+    (SELECT individual, COUNT(individual) AS sort FROM table1 GROUP BY individual ORDER BY COUNT(individual) DESC) b
+ON a.individual = b.individual
+WHERE a.dx_type = '1'
+ORDER BY b.sort DESC;
+
+/*
+SELECT
+a.*, b.*
+FROM table1 a
+LEFT JOIN 
+    (SELECT individual, COUNT(individual) AS sort FROM table1 GROUP BY individual ORDER BY COUNT(individual) DESC) b
+ON a.individual = b.individual
+ORDER BY sort DESC;
+*/
