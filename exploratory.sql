@@ -159,7 +159,7 @@ CREATE VIEW IF NOT EXISTS opd_view AS
     FROM 
         opd
     WHERE
-        age < 100.0 AND age > 0.0
+        age < 100.0 AND age >= 0.0 --Include 0 age person
 ;
 
 -- Number of individual patient in hdc table.
